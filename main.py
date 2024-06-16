@@ -11,7 +11,7 @@ import requests
 
 
 application = flask.Flask(__name__)
-
+app = application  # For main.wsgi
 
 _API_HOST = 'https://fleet-api.prd.na.vn.cloud.tesla.com'
 
