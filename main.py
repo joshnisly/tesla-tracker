@@ -118,10 +118,20 @@ def main():
 
 
 def register():
-    api_key = _get_api_key()
+    partner_token_response = requests.post('https://auth.tesla.com/oauth2/v3/token', data={
+        'grant_type': 'client_credentials',
+        'client_id': _get_client_id(),
+        'client_secret': _get_config_setting('Auth', 'Secret'),
+        'scope': 'openid offline_access energy_device_data',
+        'audience': _API_HOST,
+    })
+    print(partner_token_response)
+    print(partner_token_response.json())
+    _set_config_setting('Auth', 'PartnerToken', partner_token_response.json()['access_token'])
+
     response = requests.get(_API_HOST + '/api/1/partner_accounts', headers={
        'Content-Type': 'application/json',
-       'Authorization': 'Bearer ' + api_key
+       'Authorization': 'Bearer ' + _get_config_setting('Auth', 'PartnerToken')
     }, data=json.dumps({
         'domain': _get_config_setting('General', 'Domain'),
         'csr': open('csr.csr').read()
