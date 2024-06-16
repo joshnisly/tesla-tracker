@@ -2,7 +2,9 @@
 
 import argparse
 import configparser
+import json
 import os
+import sys
 import urllib
 import urllib.parse
 
@@ -67,6 +69,12 @@ def finish_auth():
     return flask.redirect('/')
 
 
+@application.route('/.well-known/appspecific/com.tesla.3p.public-key.pem')
+def public_key():
+    pubkey_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'public-key.pem')
+    return open(pubkey_path).read()
+
+
 def _get_api_key():
     token = _get_config_setting('Auth', 'Token')
     if not token:
@@ -89,13 +97,13 @@ def _get_client_id():
 
 def _get_config_setting(section, key):
     parser = configparser.ConfigParser()
-    parser.read(os.path.join(os.path.dirname(__file__), 'config.ini'))
+    parser.read(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.ini'))
     return parser.get(section, key, fallback=None)
 
 
 def _set_config_setting(section, key, value):
     parser = configparser.ConfigParser()
-    path = os.path.join(os.path.dirname(__file__), 'config.ini')
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.ini')
     parser.read(path)
     parser.set(section, key, value)
     with open(path, 'w') as output:
@@ -109,5 +117,23 @@ def main():
     application.run(debug=True, host=args.host)
 
 
+def register():
+    api_key = _get_api_key()
+    response = requests.get(_API_HOST + '/api/1/partner_accounts', headers={
+       'Content-Type': 'application/json',
+       'Authorization': 'Bearer ' + api_key
+    }, data=json.dumps({
+        'domain': _get_config_setting('General', 'Domain'),
+        'csr': open('csr.csr').read()
+    }))
+
+    print(response)
+    print(response.json())
+
+
 if __name__ == '__main__':
+    if '--register' in sys.argv:
+        register()
+        sys.exit(0)
+
     main()
