@@ -32,6 +32,20 @@ def index():
     print(response)
     print(response.content)
     print(response.json())
+    sites = [x for x in response.json()['response'] if x.get('resource_type') == 'wall_connector']
+    energy_site_id = sites[0]['energy_site_id']
+    response = requests.get(_API_HOST + f'/api/1/energy_sites/{energy_site_id}/telemetry_history', headers={
+       'Content-Type': 'application/json',
+       'Authorization': 'Bearer ' + api_key
+    }, params={
+        'kind': 'charge',
+        'start_date': '2023-01-01T00:00:00-08:00',
+        'end_date': '2025-01-01T00:00:00-08:00',
+        'time_zone': _get_config_setting('General', 'Timezone')
+    })
+    print(response)
+    print(response.content)
+    print(response.json())
     return str(response.json())
 
 
@@ -118,26 +132,27 @@ def main():
 
 
 def register():
-    partner_token_response = requests.post('https://auth.tesla.com/oauth2/v3/token', data={
-        'grant_type': 'client_credentials',
-        'client_id': _get_client_id(),
-        'client_secret': _get_config_setting('Auth', 'Secret'),
-        'scope': 'openid offline_access energy_device_data',
-        'audience': _API_HOST,
-    })
-    print(partner_token_response)
-    print(partner_token_response.json())
-    _set_config_setting('Auth', 'PartnerToken', partner_token_response.json()['access_token'])
+    if not _get_config_setting('Auth', 'PartnerToken'):
+        partner_token_response = requests.post('https://auth.tesla.com/oauth2/v3/token', data={
+            'grant_type': 'client_credentials',
+            'client_id': _get_client_id(),
+            'client_secret': _get_config_setting('Auth', 'Secret'),
+            'scope': 'openid offline_access energy_device_data',
+            'audience': _API_HOST,
+        })
+        print(partner_token_response)
+        print(partner_token_response.json())
+        _set_config_setting('Auth', 'PartnerToken', partner_token_response.json()['access_token'])
 
-    response = requests.get(_API_HOST + '/api/1/partner_accounts', headers={
+    response = requests.post(_API_HOST + '/api/1/partner_accounts', headers={
        'Content-Type': 'application/json',
        'Authorization': 'Bearer ' + _get_config_setting('Auth', 'PartnerToken')
     }, data=json.dumps({
-        'domain': _get_config_setting('General', 'Domain'),
-        'csr': open('csr.csr').read()
+        'domain': _get_config_setting('General', 'Domain')
     }))
 
     print(response)
+    print(response.text)
     print(response.json())
 
 
