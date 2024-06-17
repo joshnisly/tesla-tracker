@@ -41,7 +41,7 @@ def index():
         'kind': 'charge',
         'start_date': '2023-01-01T00:00:00-08:00',
         'end_date': '2025-01-01T00:00:00-08:00',
-        'time_zone': _get_config_setting('General', 'Timezone')
+        'time_zone': _get_config_setting('User', 'Timezone')
     })
     print(response)
     print(response.content)
@@ -67,8 +67,6 @@ def start_auth():
 
 @application.route('/oauth_return/')
 def finish_auth():
-    print(flask.request.args)
-
     token_response = requests.post('https://auth.tesla.com/oauth2/v3/token', data={
         'grant_type': 'authorization_code',
         'client_id': _get_client_id(),
@@ -77,9 +75,7 @@ def finish_auth():
         'audience': _API_HOST,
         'redirect_uri': 'http://localhost:5000/oauth_return/',
     })
-    print(token_response)
-    print(token_response.json())
-    _set_config_setting('Auth', 'Token', token_response.json()['refresh_token'])
+    _set_config_setting('User', 'Token', token_response.json()['refresh_token'])
     return flask.redirect('/')
 
 
@@ -90,7 +86,7 @@ def public_key():
 
 
 def _get_api_key():
-    token = _get_config_setting('Auth', 'Token')
+    token = _get_config_setting('User', 'Token')
     if not token:
         return None
 
@@ -99,9 +95,7 @@ def _get_api_key():
         'client_id': _get_client_id(),
         'refresh_token': token
     })
-    print(token_response)
-    print(token_response.json())
-    _set_config_setting('Auth', 'Token', token_response.json()['refresh_token'])
+    _set_config_setting('User', 'Token', token_response.json()['refresh_token'])
     return token_response.json()['access_token']
 
 
@@ -140,8 +134,6 @@ def register():
             'scope': 'openid offline_access energy_device_data',
             'audience': _API_HOST,
         })
-        print(partner_token_response)
-        print(partner_token_response.json())
         _set_config_setting('Auth', 'PartnerToken', partner_token_response.json()['access_token'])
 
     response = requests.post(_API_HOST + '/api/1/partner_accounts', headers={
@@ -150,10 +142,7 @@ def register():
     }, data=json.dumps({
         'domain': _get_config_setting('General', 'Domain')
     }))
-
-    print(response)
-    print(response.text)
-    print(response.json())
+    _set_config_setting('General', 'PartnerData', json.dumps(response.json()))
 
 
 if __name__ == '__main__':
