@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Charges</title>
+</head>
+<body>
+
+{% for din in chargers_by_din %}
+    <h1>{{din}} - {{chargers_by_din[din]['total'] / 1000}} kw - ${{chargers_by_din[din]['cost']}}</h1>
+    <table>
+        {% for charge in chargers_by_din[din]['charges'] %}
+        <tr>
+            <td>{{charge['start']}}</td>
+            <td>{{charge['energy_added_wh']/1000}}</td>
+        </tr>
+        {% endfor %}
+    </table>
+{% endfor %}
+</body>
+</html>

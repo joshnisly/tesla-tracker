@@ -2,6 +2,7 @@
 
 import argparse
 import configparser
+import datetime
 import json
 import os
 import sys
@@ -24,14 +25,14 @@ def index():
     if api_key is None:
         return flask.redirect(flask.url_for('start_auth'))
 
-    print(_get_config_setting('Auth', 'Token'))
+    now = datetime.datetime.now()
+    range_start = (now - datetime.timedelta(days=30)).replace(day=1, hour=0, minute=0, second=0)
+    range_end = now.replace(day=1, hour=0, minute=0, second=0)
+
     response = requests.get(_API_HOST + '/api/1/products', headers={
        'Content-Type': 'application/json',
        'Authorization': 'Bearer ' + api_key
     })
-    print(response)
-    print(response.content)
-    print(response.json())
     sites = [x for x in response.json()['response'] if x.get('resource_type') == 'wall_connector']
     energy_site_id = sites[0]['energy_site_id']
     response = requests.get(_API_HOST + f'/api/1/energy_sites/{energy_site_id}/telemetry_history', headers={
@@ -43,10 +44,23 @@ def index():
         'end_date': '2025-01-01T00:00:00-08:00',
         'time_zone': _get_config_setting('User', 'Timezone')
     })
-    print(response)
-    print(response.content)
-    print(response.json())
-    return str(response.json())
+
+    chargers_by_din = {}
+    for charge in response.json()['response']['charge_history']:
+        charge['start'] = datetime.datetime.fromtimestamp(charge['charge_start_time']['seconds'])
+        if range_start <= charge['start'] < range_end:
+            chargers_by_din.setdefault(charge['din'], {
+                'charges': []
+            })['charges'].append(charge)
+
+    for din in chargers_by_din:
+        chargers_by_din[din]['total'] = sum([x['energy_added_wh'] for x in chargers_by_din[din]['charges']])
+        price = float(_get_config_setting('User', f'din_{din}_price') or _get_config_setting('User', 'DefaultPrice'))
+        chargers_by_din[din]['cost'] = round(chargers_by_din[din]['total'] * price / 1000, 2)
+    #print(response.json())
+    return flask.render_template('charges.html', **{
+        'chargers_by_din': chargers_by_din
+    })
 
 
 @application.route('/auth/')
