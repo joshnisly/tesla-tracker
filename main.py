@@ -5,6 +5,8 @@ import configparser
 import datetime
 import json
 import os
+import random
+import string
 import sys
 import urllib
 import urllib.parse
@@ -20,8 +22,20 @@ _API_HOST = 'https://fleet-api.prd.na.vn.cloud.tesla.com'
 
 
 @application.route('/')
-def index():
-    api_key = _get_api_key()
+@application.route('/<user_key>/')
+@application.route('/<user_key>/<charger_id>/')
+def index(user_key=None, charger_id=None):
+    if not user_key:
+        # Check for cookies
+        user_key = flask.request.cookies.get('UserID')
+        if user_key:
+            return flask.redirect(flask.url_for('index', user_key=user_key))
+    elif not flask.request.cookies.get('UserID'):
+        response = flask.redirect(flask.url_for('index', user_key=user_key))
+        response.set_cookie('UserID', user_key)
+        return response
+
+    api_key = _get_api_key(user_key)
     if api_key is None:
         return flask.redirect(flask.url_for('start_auth'))
 
@@ -42,24 +56,31 @@ def index():
         'kind': 'charge',
         'start_date': '2023-01-01T00:00:00-08:00',
         'end_date': '2025-01-01T00:00:00-08:00',
-        'time_zone': _get_config_setting('User', 'Timezone')
+        'time_zone': _get_config_setting(user_key, 'User', 'Timezone')
     })
 
     chargers_by_din = {}
     for charge in response.json()['response']['charge_history']:
+        if charger_id is not None and charge['din'].lower() != charger_id.lower():
+            continue
+
         charge['start'] = datetime.datetime.fromtimestamp(charge['charge_start_time']['seconds'])
         if range_start <= charge['start'] < range_end:
             chargers_by_din.setdefault(charge['din'], {
-                'charges': []
+                'charges': [],
+                'nickname': _get_config_setting(user_key, charge['din'], 'nickname') or charge['din']
             })['charges'].append(charge)
 
     for din in chargers_by_din:
         chargers_by_din[din]['total'] = sum([x['energy_added_wh'] for x in chargers_by_din[din]['charges']])
-        price = float(_get_config_setting('User', f'din_{din}_price') or _get_config_setting('User', 'DefaultPrice'))
+        price = float(_get_config_setting(user_key, din, 'price') or
+                      _get_config_setting(user_key, 'User', 'DefaultPrice'))
         chargers_by_din[din]['cost'] = round(chargers_by_din[din]['total'] * price / 1000, 2)
-    #print(response.json())
+
     return flask.render_template('charges.html', **{
-        'chargers_by_din': chargers_by_din
+        'chargers_by_din': chargers_by_din,
+        'date_range_start': range_start,
+        'date_range_end': range_end
     })
 
 
@@ -84,12 +105,14 @@ def finish_auth():
     token_response = requests.post('https://auth.tesla.com/oauth2/v3/token', data={
         'grant_type': 'authorization_code',
         'client_id': _get_client_id(),
-        'client_secret': _get_config_setting('Auth', 'Secret'),
+        'client_secret': _get_config_setting(None, 'Auth', 'Secret'),
         'code': flask.request.args['code'],
         'audience': _API_HOST,
         'redirect_uri': 'http://localhost:5000/oauth_return/',
     })
-    _set_config_setting('User', 'Token', token_response.json()['refresh_token'])
+    user_key = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(20))
+
+    _set_config_setting(user_key, 'User', 'Token', token_response.json()['refresh_token'])
     return flask.redirect('/')
 
 
@@ -99,8 +122,8 @@ def public_key():
     return open(pubkey_path).read()
 
 
-def _get_api_key():
-    token = _get_config_setting('User', 'Token')
+def _get_api_key(user_key):
+    token = _get_config_setting(user_key, 'User', 'Token')
     if not token:
         return None
 
@@ -109,27 +132,33 @@ def _get_api_key():
         'client_id': _get_client_id(),
         'refresh_token': token
     })
-    _set_config_setting('User', 'Token', token_response.json()['refresh_token'])
+    _set_config_setting(user_key, 'User', 'Token', token_response.json()['refresh_token'])
     return token_response.json()['access_token']
 
 
 def _get_client_id():
-    return _get_config_setting('Auth', 'ClientID')
+    return _get_config_setting(None, 'Auth', 'ClientID')
 
 
-def _get_config_setting(section, key):
+def _get_config_setting(user_key, section, key):
     parser = configparser.ConfigParser()
-    parser.read(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.ini'))
+    parser.read(_get_config_path(user_key))
     return parser.get(section, key, fallback=None)
 
 
-def _set_config_setting(section, key, value):
+def _set_config_setting(user_key, section, key, value):
     parser = configparser.ConfigParser()
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.ini')
-    parser.read(path)
+    parser.read(_get_config_path(user_key))
     parser.set(section, key, value)
-    with open(path, 'w') as output:
+    with open(_get_config_path(user_key), 'w') as output:
         parser.write(output)
+
+
+def _get_config_path(user_key):
+    if user_key is not None:
+        return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sessions', user_key, 'config.ini')
+    else:
+        return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.ini')
 
 
 def main():
@@ -140,7 +169,7 @@ def main():
 
 
 def register():
-    if not _get_config_setting('Auth', 'PartnerToken'):
+    if not _get_config_setting(None, 'Auth', 'PartnerToken'):
         partner_token_response = requests.post('https://auth.tesla.com/oauth2/v3/token', data={
             'grant_type': 'client_credentials',
             'client_id': _get_client_id(),
@@ -148,15 +177,15 @@ def register():
             'scope': 'openid offline_access energy_device_data',
             'audience': _API_HOST,
         })
-        _set_config_setting('Auth', 'PartnerToken', partner_token_response.json()['access_token'])
+        _set_config_setting(None, 'Auth', 'PartnerToken', partner_token_response.json()['access_token'])
 
     response = requests.post(_API_HOST + '/api/1/partner_accounts', headers={
        'Content-Type': 'application/json',
-       'Authorization': 'Bearer ' + _get_config_setting('Auth', 'PartnerToken')
+       'Authorization': 'Bearer ' + _get_config_setting(None, 'Auth', 'PartnerToken')
     }, data=json.dumps({
-        'domain': _get_config_setting('General', 'Domain')
+        'domain': _get_config_setting(None, 'General', 'Domain')
     }))
-    _set_config_setting('General', 'PartnerData', json.dumps(response.json()))
+    _set_config_setting(None, 'General', 'PartnerData', json.dumps(response.json()))
 
 
 if __name__ == '__main__':
