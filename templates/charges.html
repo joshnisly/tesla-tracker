@@ -6,15 +6,23 @@
 </head>
 <body>
 
-{{date_range_start}} - {{date_range_end}}
 
 {% for din in chargers_by_din %}
     <h1><span title="{{din}}">{{chargers_by_din[din]['nickname']}}</span> - {{chargers_by_din[din]['total'] / 1000}} kw - ${{chargers_by_din[din]['cost']}}</h1>
+    <div>Date Range: {{date_range_name}} ({{date_range_start.strftime('%m/%d/%Y')}} - {{date_range_end.strftime('%m/%d/%Y')}})</div>
     <table>
+        <thead>
+        <tr>
+            <td>Date/time</td>
+            <td>KWh</td>
+            <td>Cost</td>
+        </tr>
+        </thead>
         {% for charge in chargers_by_din[din]['charges'] %}
         <tr>
             <td>{{charge['start']}}</td>
             <td>{{charge['energy_added_wh']/1000}}</td>
+            <td>{{charge['cost']}}</td>
         </tr>
         {% endfor %}
     </table>

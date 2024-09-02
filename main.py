@@ -32,16 +32,24 @@ def index(user_key=None, charger_id=None):
             return flask.redirect(flask.url_for('index', user_key=user_key))
     elif not flask.request.cookies.get('UserID'):
         response = flask.redirect(flask.url_for('index', user_key=user_key))
-        response.set_cookie('UserID', user_key)
+        response.set_cookie('UserID', user_key, expires=datetime.datetime.now() + datetime.timedelta(days=1000))
         return response
 
     api_key = _get_api_key(user_key)
     if api_key is None:
         return flask.redirect(flask.url_for('start_auth'))
 
+    range_name = 'This Month'
+    if flask.request.args.get('date', '').lower() == 'last month':
+        range_name = 'Last Month'
+
     now = datetime.datetime.now()
-    range_start = (now - datetime.timedelta(days=30)).replace(day=1, hour=0, minute=0, second=0)
-    range_end = now.replace(day=1, hour=0, minute=0, second=0)
+    if range_name == 'Last Month':
+        range_start = (now - datetime.timedelta(days=30)).replace(day=1, hour=0, minute=0, second=0)
+        range_end = now.replace(day=1, hour=0, minute=0, second=0)
+    else:
+        range_start = now.replace(day=1, hour=0, minute=0, second=0)
+        range_end = now
 
     response = requests.get(_API_HOST + '/api/1/products', headers={
        'Content-Type': 'application/json',
@@ -66,10 +74,14 @@ def index(user_key=None, charger_id=None):
 
         charge['start'] = datetime.datetime.fromtimestamp(charge['charge_start_time']['seconds'])
         if range_start <= charge['start'] < range_end:
-            chargers_by_din.setdefault(charge['din'], {
+            charges = chargers_by_din.setdefault(charge['din'], {
                 'charges': [],
-                'nickname': _get_config_setting(user_key, charge['din'], 'nickname') or charge['din']
-            })['charges'].append(charge)
+                'nickname': _get_config_setting(user_key, charge['din'], 'nickname') or charge['din'],
+                'price': float(_get_config_setting(user_key, charge['din'], 'price') or
+                               _get_config_setting(user_key, 'User', 'DefaultPrice'))
+            })['charges']
+            charges.append(charge)
+            charge['cost'] = round(charge['energy_added_wh'] / 1000 * chargers_by_din[charge['din']]['price'], 2)
 
     for din in chargers_by_din:
         chargers_by_din[din]['total'] = sum([x['energy_added_wh'] for x in chargers_by_din[din]['charges']])
@@ -80,7 +92,8 @@ def index(user_key=None, charger_id=None):
     return flask.render_template('charges.html', **{
         'chargers_by_din': chargers_by_din,
         'date_range_start': range_start,
-        'date_range_end': range_end
+        'date_range_end': range_end,
+        'date_range_name': range_name
     })
 
 
