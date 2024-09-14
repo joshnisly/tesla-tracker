@@ -162,7 +162,10 @@ def _get_config_setting(user_key, section, key):
 def _set_config_setting(user_key, section, key, value):
     parser = configparser.ConfigParser()
     parser.read(_get_config_path(user_key))
+    if not parser.has_section(section):
+        parser.add_section(section)
     parser.set(section, key, value)
+    os.makedirs(os.path.dirname(_get_config_path(user_key)), exist_ok=True)
     with open(_get_config_path(user_key), 'w') as output:
         parser.write(output)
 
