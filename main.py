@@ -103,7 +103,7 @@ def start_auth():
     args = {
         'response_type': 'code',
         'client_id': _get_client_id(),
-        'redirect_uri': 'http://localhost:5000/oauth_return/',
+        'redirect_uri': '%s/oauth_return/' % _get_config_setting(None, 'General', 'redirect_url'),
         'scope': 'openid offline_access energy_device_data',
         'state': 'asdfasdrfas',
     }
@@ -121,7 +121,7 @@ def finish_auth():
         'client_secret': _get_config_setting(None, 'Auth', 'Secret'),
         'code': flask.request.args['code'],
         'audience': _API_HOST,
-        'redirect_uri': 'http://localhost:5000/oauth_return/',
+        'redirect_uri': '%s/oauth_return/' % _get_config_setting(None, 'General', 'redirect_url'),
     })
     user_key = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(20))
 
