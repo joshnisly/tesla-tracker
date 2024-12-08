@@ -3,13 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <title>Charges</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='bootstrap.min.css') }}"/>
+    <link rel="stylesheet" href="{{ url_for('static', filename='main.css') }}"/>
 </head>
 <body>
 
+    <div>{{date_range_name}} ({{date_range_start.strftime('%m/%d/%Y')}} - {{date_range_end.strftime('%m/%d/%Y')}})</div>
+{% for range in date_ranges %}
+    <div><a href="?date={{range}}">{{range}}</a></div>
+{% endfor %}
 
-{% for din in chargers_by_din %}
+{% for din in chargers_by_din|sort(reverse=True) %}
     <h1><span title="{{din}}">{{chargers_by_din[din]['nickname']}}</span> - {{chargers_by_din[din]['total'] / 1000}} kw - ${{chargers_by_din[din]['cost']}}</h1>
-    <div>Date Range: {{date_range_name}} ({{date_range_start.strftime('%m/%d/%Y')}} - {{date_range_end.strftime('%m/%d/%Y')}})</div>
     <table>
         <thead>
         <tr>
@@ -21,8 +27,8 @@
         {% for charge in chargers_by_din[din]['charges'] %}
         <tr>
             <td>{{charge['start']}}</td>
-            <td>{{charge['energy_added_wh']/1000}}</td>
-            <td>{{charge['cost']}}</td>
+            <td style="text-align: right">{{'{:,.1f}'.format(charge['energy_added_wh']/1000)}}</td>
+            <td style="text-align: right">${{'{:,.2f}'.format(charge['cost'])}}</td>
         </tr>
         {% endfor %}
     </table>

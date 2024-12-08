@@ -36,17 +36,31 @@ def index(user_key=None, charger_id=None):
         response.set_cookie('UserID', user_key, expires=datetime.datetime.now() + datetime.timedelta(days=1000))
         return response
 
-    range_name = 'This Month'
-    if flask.request.args.get('date', '').lower() == 'last month':
-        range_name = 'Last Month'
-
     now = datetime.datetime.now()
-    if range_name == 'Last Month':
-        range_start = (now - datetime.timedelta(days=30)).replace(day=1, hour=0, minute=0, second=0)
-        range_end = now.replace(day=1, hour=0, minute=0, second=0)
+    ranges = [{
+        'name': 'This Month',
+        'start': now.replace(day=1, hour=0, minute=0, second=0),
+        'end': now
+    }, {
+        'name': 'Last Month',
+        'start': (now - datetime.timedelta(days=30)).replace(day=1, hour=0, minute=0, second=0),
+        'end': now.replace(day=1, hour=0, minute=0, second=0)
+    }, {
+        'name': 'This Year',
+        'start': now.replace(month=1, day=1, hour=0, minute=0, second=0),
+        'end': now
+    }]
+    range_name = flask.request.args.get('date', ranges[0]['name']).lower()
+    for range in ranges:
+        if range['name'].lower() == range_name:
+            range_start = range['start']
+            range_end = range['end']
+            range_name = range['name']
+            break
     else:
-        range_start = now.replace(day=1, hour=0, minute=0, second=0)
-        range_end = now
+        range_start = ranges[0]['start']
+        range_end = ranges[0]['end']
+        range_name = ranges[0]['name']
 
     cache_path = _get_cache_path(user_key)
     if os.path.exists(cache_path) and os.stat(cache_path).st_mtime > time.time() - 60 * 60 * 24:
@@ -68,7 +82,7 @@ def index(user_key=None, charger_id=None):
         }, params={
             'kind': 'charge',
             'start_date': '2023-01-01T00:00:00-08:00',
-            'end_date': '2025-01-01T00:00:00-08:00',
+            'end_date': '2026-01-01T00:00:00-08:00',
             'time_zone': _get_config_setting(user_key, 'User', 'Timezone')
         })
 
@@ -103,7 +117,8 @@ def index(user_key=None, charger_id=None):
         'chargers_by_din': chargers_by_din,
         'date_range_start': range_start,
         'date_range_end': range_end,
-        'date_range_name': range_name
+        'date_range_name': range_name,
+        'date_ranges': [x['name'] for x in ranges]
     })
 
 
