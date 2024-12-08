@@ -49,6 +49,10 @@ def index(user_key=None, charger_id=None):
         'name': 'This Year',
         'start': now.replace(month=1, day=1, hour=0, minute=0, second=0),
         'end': now
+    }, {
+        'name': 'Last Year',
+        'start': now.replace(year=now.year-1, month=1, day=1, hour=0, minute=0, second=0),
+        'end': now.replace(month=1, day=1, hour=0, minute=0, second=0)
     }]
     range_name = flask.request.args.get('date', ranges[0]['name']).lower()
     for range in ranges:
