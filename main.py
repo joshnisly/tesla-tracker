@@ -8,6 +8,7 @@ import os
 import random
 import string
 import sys
+import time
 import urllib
 import urllib.parse
 
@@ -51,24 +52,33 @@ def index(user_key=None, charger_id=None):
         range_start = now.replace(day=1, hour=0, minute=0, second=0)
         range_end = now
 
-    response = requests.get(_API_HOST + '/api/1/products', headers={
-       'Content-Type': 'application/json',
-       'Authorization': 'Bearer ' + api_key
-    })
-    sites = [x for x in response.json()['response'] if x.get('resource_type') == 'wall_connector']
-    energy_site_id = sites[0]['energy_site_id']
-    response = requests.get(_API_HOST + f'/api/1/energy_sites/{energy_site_id}/telemetry_history', headers={
-       'Content-Type': 'application/json',
-       'Authorization': 'Bearer ' + api_key
-    }, params={
-        'kind': 'charge',
-        'start_date': '2023-01-01T00:00:00-08:00',
-        'end_date': '2025-01-01T00:00:00-08:00',
-        'time_zone': _get_config_setting(user_key, 'User', 'Timezone')
-    })
+    cache_path = _get_cache_path(user_key)
+    if os.path.exists(cache_path) and os.stat(cache_path).st_mtime > time.time() - 60 * 60 * 24:
+        charge_history = json.load(open(cache_path))
+    else:
+        response = requests.get(_API_HOST + '/api/1/products', headers={
+           'Content-Type': 'application/json',
+           'Authorization': 'Bearer ' + api_key
+        })
+        sites = [x for x in response.json()['response'] if x.get('resource_type') == 'wall_connector']
+        energy_site_id = sites[0]['energy_site_id']
+        response = requests.get(_API_HOST + f'/api/1/energy_sites/{energy_site_id}/telemetry_history', headers={
+           'Content-Type': 'application/json',
+           'Authorization': 'Bearer ' + api_key
+        }, params={
+            'kind': 'charge',
+            'start_date': '2023-01-01T00:00:00-08:00',
+            'end_date': '2025-01-01T00:00:00-08:00',
+            'time_zone': _get_config_setting(user_key, 'User', 'Timezone')
+        })
+
+        charge_history = response.json()['response']
+
+        with open(cache_path, 'w') as cache:
+            json.dump(cache, charge_history, indent=4)
 
     chargers_by_din = {}
-    for charge in response.json()['response']['charge_history']:
+    for charge in charge_history:
         if charger_id is not None and charge['din'].lower() != charger_id.lower():
             continue
 
@@ -153,6 +163,10 @@ def _get_client_id():
     return _get_config_setting(None, 'Auth', 'ClientID')
 
 
+def _get_cache_path(user_key):
+    return os.path.join(_get_user_dir(user_key), 'cache.json')
+
+
 def _get_config_setting(user_key, section, key):
     parser = configparser.ConfigParser()
     parser.read(_get_config_path(user_key))
@@ -170,9 +184,13 @@ def _set_config_setting(user_key, section, key, value):
         parser.write(output)
 
 
+def _get_user_dir(user_key):
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sessions', user_key)
+
+
 def _get_config_path(user_key):
     if user_key is not None:
-        return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sessions', user_key, 'config.ini')
+        return os.path.join(_get_user_dir(user_key), 'config.ini')
     else:
         return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.ini')
 
