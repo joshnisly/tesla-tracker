@@ -36,10 +36,6 @@ def index(user_key=None, charger_id=None):
         response.set_cookie('UserID', user_key, expires=datetime.datetime.now() + datetime.timedelta(days=1000))
         return response
 
-    api_key = _get_api_key(user_key)
-    if api_key is None:
-        return flask.redirect(flask.url_for('start_auth'))
-
     range_name = 'This Month'
     if flask.request.args.get('date', '').lower() == 'last month':
         range_name = 'Last Month'
@@ -56,6 +52,10 @@ def index(user_key=None, charger_id=None):
     if os.path.exists(cache_path) and os.stat(cache_path).st_mtime > time.time() - 60 * 60 * 24:
         charge_history = json.load(open(cache_path))
     else:
+        api_key = _get_api_key(user_key)
+        if api_key is None:
+            return flask.redirect(flask.url_for('start_auth'))
+
         response = requests.get(_API_HOST + '/api/1/products', headers={
            'Content-Type': 'application/json',
            'Authorization': 'Bearer ' + api_key
@@ -75,10 +75,10 @@ def index(user_key=None, charger_id=None):
         charge_history = response.json()['response']
 
         with open(cache_path, 'w') as cache:
-            json.dump(cache, charge_history, indent=4)
+            json.dump(charge_history, cache, indent=4)
 
     chargers_by_din = {}
-    for charge in charge_history:
+    for charge in charge_history['charge_history']:
         if charger_id is not None and charge['din'].lower() != charger_id.lower():
             continue
 
