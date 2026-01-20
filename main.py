@@ -86,7 +86,7 @@ def index(user_key=None, charger_id=None):
         }, params={
             'kind': 'charge',
             'start_date': '2023-01-01T00:00:00-08:00',
-            'end_date': '2026-01-01T00:00:00-08:00',
+            'end_date': '2029-01-01T00:00:00-08:00',
             'time_zone': _get_config_setting(user_key, 'User', 'Timezone')
         })
 
