@@ -78,7 +78,7 @@ def index(user_key=None, charger_id=None):
            'Content-Type': 'application/json',
            'Authorization': 'Bearer ' + api_key
         })
-        sites = [x for x in response.json()['response'] if x.get('resource_type') == 'wall_connector']
+        sites = [x for x in response.json()['response'] if x.get('resource_type') in ['wall_connector', 'charger']]
         energy_site_id = sites[0]['energy_site_id']
         response = requests.get(_API_HOST + f'/api/1/energy_sites/{energy_site_id}/telemetry_history', headers={
            'Content-Type': 'application/json',
